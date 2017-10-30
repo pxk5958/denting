@@ -1,21 +1,21 @@
-# Tetrahedralization of Triangular meshes
+# Incremental Delaunay Triangulation
 
 ## Author
 Pratith Kanagaraj (pxk5958@rit.edu)
 
 ## Description
-Realistic deforming of rigid bodies in modern day computer games is required for immersive gameplay. This is achieved through efficient Finite Element Methods (FEM). While the game assets are usually in the form of triangular meshes, FEM operates on tetrahedral meshes. Therefore, this project aims to convert triangular mesh into tetrahedral form and visualize it.
+Pedagogical tool to visualize incremental construction of Delaunay triangulation and Voronoi diagram for a given set of points in a plaane.
 
 ## References
-1.	M. Muller and M. Teschner. "Volumetric Meshes for Real-Time Medical Simulations." In Bildverarbeitung für die Medizin 2003, CEUR Workshop Proceedings, 80, pp. 279-283. Aachen, Germany: CEURWS.org, 2003.
+1.	Dani Lischinski. "Incremental Delaunau Triangulation". In "Graphics Gems IV", Academic Press, 1994.
 
-2.  J. Spillman, M. Becker, and M. Teschner. "Robust Tetrahedral Meshing of Triangle Soups." In Vision, Modelling, and Visualization 2006, pp. 9-16. Berline: Akademische Verlagsgesekkschaft, 2006.
+2.  J. Spillman, M. Becker, and M. Teschner. "Primitives for the manipulation of general subdivisions and the computation of Voronoi". In ACM Transactions on Graphics (TOG), Volume 4 Issue 2, April 1985, Pages 74-123.
 
 ## Software
-three.js framework (WebGL 2.0)
+pixi.js framework
 
 ## Timeline
-- [ ] Week 6: Research which tetrahedralization algorithm to implement
-- [ ] Week 7-10: Implement algorithm
-- [ ] Week 10-12: GUI using threejs
+- [x] Week 6-9: Research tetrahedralization algorithms and implement (Cancelled)
+- [ ] Week 10-11: Implement incremental Delaunay triangulation algorithm
+- [ ] Week 12: GUI using pixi.js
 - [ ] Week 13-14: Testing
