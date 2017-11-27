@@ -4,15 +4,15 @@
  * @author Pratith Kanagaraj <pxk5958@rit.edu>, 2017
  */
 
-/* global PIXI */
 /* global THREE */
+/* global d3 */
 
 
 var incrementalDelaunay = function() {
 
 const EPSILON = 1e-6;
-const RENDER_WIDTH = 720;
-const RENDER_HEIGHT = 720;
+const WIDTH = 720;
+const HEIGHT = 720;
 
 var backgroundColor = 0xFFFFFF;
 var pointColor = 0x000000;
@@ -23,17 +23,31 @@ var voronoiEdgeWidth = 2;
 var voronoiEdgeColor = 0xD35400;
 var voronoiCircleWidth = 1;
 var voronoiCircleColor = 0xE5E8E8;
-var pointGraphics = [];
 
-var renderer, stage, lineGraphics;
+//var renderer, stage, lineGraphics;
 var points = [];
 var mesh;
 var timestamp = 0;
 
+var svg = d3.select("svg")
+	.attr("width", WIDTH)
+    .attr("height", HEIGHT);
+
 var drawDT = true;
-var drawVD = true;
-var drawVoronoiCircles = true;
+var drawVD = false;
+var drawVoronoiCircles = false;
 var drawSteps = true;
+
+var frameData = [];
+frameData.push(emptyData());
+
+function emptyData() {
+	return {
+		triEdges: [],
+		vorEdges: [],
+		vorCircles: []
+	};
+}
 
 class Line {
 	constructor(p, q) {
@@ -128,15 +142,18 @@ class Edge {
 		this.sym().data = de;
 	}
 	
-	draw(stamp) {
+	draw(stamp, data) {
 		if (this.qEdge.timeStamp(stamp)) {
 			var a = this.org2d();
 			var b = this.dest2d();
 			
 			if (drawDT) {
-				lineGraphics.lineStyle(triangleEdgeWidth, triangleEdgeColor);
-				lineGraphics.moveTo(a.x, a.y);
-				lineGraphics.lineTo(b.x, b.y);
+				data.triEdges.push({
+					x1: a.x,
+					y1: a.y,
+					x2: b.x,
+					y2: b.y
+				});
 			}
 			
 			var result, t;
@@ -145,11 +162,17 @@ class Edge {
 				var xu = (a.x + b.x) * 0.5;
 				var yu = (a.y + b.y) * 0.5;
 				var theta = Math.atan2((b.y - a.y), (b.x - a.x));
-				var far = Math.max(RENDER_HEIGHT, RENDER_WIDTH) * 2;
-				var da = new PIXI.Point(xu - far*Math.sin(theta), 
-										yu + far*Math.cos(theta));
-				var db = new PIXI.Point(xu + far*Math.sin(theta), 
-										yu - far*Math.cos(theta));
+				var far = Math.max(HEIGHT, WIDTH) * 2;
+				var da = {
+					x: xu - far*Math.sin(theta), 
+					y: yu + far*Math.cos(theta)
+					
+				};
+				var db = {
+					x: xu + far*Math.sin(theta), 
+					y: yu - far*Math.cos(theta)
+					
+				};
 				if (ccw(a, b, da)) {
 					var tmp = da;
 					da = db;
@@ -167,34 +190,31 @@ class Edge {
 					db = result[0];
 				}
 				
-				lineGraphics.lineStyle(voronoiEdgeWidth, voronoiEdgeColor);
-				lineGraphics.moveTo(da.x, da.y);
-				lineGraphics.lineTo(db.x, db.y);
+				data.vorEdges.push({
+					x1: da.x,
+					y1: da.y,
+					x2: db.x,
+					y2: db.y
+				});
 			}
 			
 			if (drawVoronoiCircles) {
 				t = this.oprev();
 				if (rightOf(t.dest2d(), this)) {
 					result = circumCircle(a, b, t.dest2d());
-					lineGraphics.lineStyle(voronoiCircleWidth, voronoiCircleColor);
-					lineGraphics.drawCircle(result[0].x, result[0].y, result[1]);
+					data.vorCircles.push({
+						cx: result[0].x, 
+						cy: result[0].y, 
+						r: result[1]
+					});
 				}
 			}
 			
-			this.onext().draw(stamp);
-			this.oprev().draw(stamp);
-			this.dnext().draw(stamp);
-			this.dprev().draw(stamp);
+			this.onext().draw(stamp, data);
+			this.oprev().draw(stamp, data);
+			this.dnext().draw(stamp, data);
+			this.dprev().draw(stamp, data);
 		}
-	}
-	
-	drawSolid(edgeColor) {
-		var a = this.org2d();
-		var b = this.dest2d();
-			
-		lineGraphics.lineStyle(triangleEdgeWidth, edgeColor);
-		lineGraphics.moveTo(a.x, a.y);
-		lineGraphics.lineTo(b.x, b.y);
 	}
 }
 
@@ -230,10 +250,14 @@ class QuadEdge {
 
 class Subdivision {
 	constructor(a, b, c) {
+		var oldData = frameData[frameData.length-1];
+		frameData = [];
+		frameData.push(oldData);
+		
 		var da, db, dc;
-		da = a.clone();
-		db = b.clone();
-		dc = c.clone();
+		da = a;
+		db = b;
+		dc = c;
 		var ea = makeEdge();
 		ea.endPoints(da, db);
 		var eb = makeEdge();
@@ -244,13 +268,18 @@ class Subdivision {
 		ec.endPoints(dc, da);
 		splice(ec.sym(), ea);
 		this.startingEdge = ea;
+		
+		var newData = emptyData();
+		this.draw(newData);
+		frameData.push(newData);
 	}
 	
 	locate(x) {
 		var e = this.startingEdge;
 		
 		while (true) {
-			if (x.equals(e.org2d()) || x.equals(e.dest2d())) {
+			if ((x.x == e.org2d().x && x.y == e.org2d().y) 
+				|| (x.x == e.dest2d().x && x.y == e.dest2d().y)) {
 				return e;
 			} else if (rightOf(x, e)) {
 				e = e.sym();
@@ -272,15 +301,22 @@ class Subdivision {
 		var e = result[0];
 		var inside = result[1];
 		
-		if (x.equals(e.org2d()) || x.equals(e.dest2d())) {
+		if ((x.x == e.org2d().x && x.y == e.org2d().y) 
+			|| (x.x == e.dest2d().x && x.y == e.dest2d().y)) {
 			return;
-		} else if (onEdge(x, e)) {
+		}
+		
+		var oldData = frameData[frameData.length-1];
+		frameData = [];
+		frameData.push(oldData);
+		
+		if (onEdge(x, e)) {
 			e = e.oprev();
 			deleteEdge(e.onext());
 		}
 		
 		var base = makeEdge();
-		base.endPoints(e.org(), x.clone());
+		base.endPoints(e.org(), x);
 		splice(base, e);
 		this.startingEdge = base;
 		if (inside) {
@@ -309,6 +345,9 @@ class Subdivision {
 				swap(e);
 				e = e.oprev();
 			} else if (e.onext() == this.startingEdge) {
+				var newData = emptyData();
+				this.draw(newData);
+				frameData.push(newData);
 				return;
 			} else {
 				e = e.onext().lprev();
@@ -316,11 +355,11 @@ class Subdivision {
 		} while (true);
 	}
 	
-	draw() {
+	draw(data) {
 		if (++timestamp == 0) {
 			timestamp = 1;
 		}
-		this.startingEdge.draw(timestamp);
+		this.startingEdge.draw(timestamp, data);
 	}
 }
 
@@ -349,7 +388,10 @@ function circumCircle(a, b, c) {
     var xc = (z1 * y2 - z2 * y1) / d + a.x;
     var yc = (x1 * z2 - x2 * z1) / d + a.y;
     
-    var center = new PIXI.Point(xc, yc);
+    var center = {
+		x: xc,
+    	y: yc
+	};
     var dx = xc - a.x;
     var dy = yc - a.y;
     var radius = Math.sqrt(dx*dx + dy*dy);
@@ -435,123 +477,213 @@ function swap(e) {
  * Initializes WebGL using three.js and sets up the scene
  */
 function init() {
-	renderer = PIXI.autoDetectRenderer(RENDER_WIDTH, RENDER_HEIGHT, { backgroundColor: 0x000000, antialias: true });
-	renderer.backgroundColor = backgroundColor;
+	// renderer = PIXI.autoDetectRenderer(RENDER_WIDTH, RENDER_HEIGHT, { backgroundColor: 0x000000, antialias: true });
+	// renderer.backgroundColor = backgroundColor;
 	    
-	// Add the render window to the document
-	document.body.appendChild( renderer.view );
+	// // Add the render window to the document
+	// document.body.appendChild( renderer.view );
 	
-	// Create the main stage for your display objects
-	stage = new PIXI.Container();
-	stage.position.y = renderer.height / renderer.resolution;
-	stage.scale.y = -1;
+	// // Create the main stage for your display objects
+	// stage = new PIXI.Container();
+	// stage.position.y = renderer.height / renderer.resolution;
+	// stage.scale.y = -1;
 	
-	var dummy = new PIXI.Container();
-	dummy.interactive = true;
-	dummy.hitArea = new PIXI.Rectangle(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
-	dummy
-		.on('mousedown', onStageClick)
-	    .on('touchstart', onStageClick);
-	stage.addChild(dummy);
+	// var dummy = new PIXI.Container();
+	// dummy.interactive = true;
+	// dummy.hitArea = new PIXI.Rectangle(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
+	// dummy
+	// 	.on('mousedown', onStageClick)
+	//     .on('touchstart', onStageClick);
+	// stage.addChild(dummy);
 
-	lineGraphics = new PIXI.Graphics();
-	stage.addChild(lineGraphics);
+	// lineGraphics = new PIXI.Graphics();
+	// stage.addChild(lineGraphics);
 
 	// Start animating
-	animate();
+	// animate();
 }
 
-function addPoint(x, y) {
-	// Initialize the pixi Graphics class
-	var graphics = new PIXI.Graphics();
+svg
+//.on('dragstart', function () { d3.event.sourceEvent.stopPropagation(); })
+.on("click", function() {
+	var coords = d3.mouse(this);
+
+	// Normally we go from data to pixels, but here we're doing pixels to data
+	var newData = {
+		x: coords[0],
+    	y: coords[1]
+	};
+
+	points.push(newData);
 	
-    graphics.beginFill(pointColor);
-    graphics.drawCircle(0, 0, pointRadius);
-    graphics.interactive = true;
-    graphics.buttonMode = true;
-    graphics.hitArea = new PIXI.Circle(0, 0, pointRadius);
-    graphics
-    	.on('mousedown', onPointDragStart)
-	    .on('touchstart', onPointDragStart)
-	    .on('mouseup', onPointDragEnd)
-	    .on('mouseupoutside', onPointDragEnd)
-	    .on('touchend', onPointDragEnd)
-	    .on('touchendoutside', onPointDragEnd)
-	    .on('mousemove', onPointDragMove)
-	    .on('touchmove', onPointDragMove);
-	graphics.position.x = x;
-	graphics.position.y = y;
-    graphics.endFill(pointColor);
-    
-    // Add the graphics to the stage
-	stage.addChild(graphics);
-	
-	pointGraphics.push(graphics);
-}
-
-function onStageClick(event) {
-	var newPosition = event.data.getLocalPosition(this.parent);
-	addPoint(newPosition.x, newPosition.y);
-}
-
-function onPointDragStart(event) {
-    // store a reference to the data
-    // the reason for this is because of multitouch
-    // we want to track the movement of this particular touch
-    this.data = event.data;
-    this.alpha = 0.5;
-    this.dragging = true;
-}
-
-function onPointDragEnd() {
-    this.alpha = 1;
-
-    this.dragging = false;
-
-    // set the interaction data to null
-    this.data = null;
-}
-
-function onPointDragMove() {
-    if (this.dragging) {
-        var newPosition = this.data.getLocalPosition(this.parent);
-        this.position.x = newPosition.x;
-        this.position.y = newPosition.y;
-    }
-}
-
-/**
- * Animate function
- */
-function animate() {
-	points.length = 0;
-	for (var i = 0; i < pointGraphics.length; ++i) {
-		var p = new PIXI.Point(pointGraphics[i].position.x, 
-								pointGraphics[i].position.y);
-		points.push(p);
-	}
-	
+	svg.selectAll("circle.point")
+            .data(points)
+            .enter()
+    		.append("circle")
+		    .attr("class", "point")
+    		.attr("cx", function(d) { return d.x; })
+    		.attr("cy", function(d) { return d.y; })
+		    .attr("r", pointRadius);
+		    // .call(d3.drag()
+	     //   .on("start", dragstarted)
+	     //   .on("drag", dragged)
+	     //   .on("end", dragended));
+	     
 	// Triangulate
-	if (points.length < 3) {
-		renderer.render(stage);
-	} else if (points.length >= 3) {
-		mesh = new Subdivision(points[0], points[1], points[2]);
+	if (points.length >= 3) {
 		if (points.length == 3) {
-			lineGraphics.clear();
-			mesh.draw();
-			renderer.render(stage);
+			mesh = new Subdivision(points[0], points[1], points[2]);
 		} else {
-			for (var i = 3; i < points.length; ++i) {
-				mesh.insertSite(points[i]);
-			}
-			lineGraphics.clear();
-			mesh.draw();
-			renderer.render(stage);
+			mesh.insertSite(points[points.length - 1]);
 		}
+		
+		redraw(frameData[frameData.length-1]);
 	}
-	
-    requestAnimationFrame(animate);
+});
+
+function dragstarted(d) {
+  d3.select(this).raise().classed("active", true);
 }
+
+function dragged(d) {
+  d3.select(this).attr("cx", d.x = d3.event.x).attr("cy", d.y = d3.event.y);
+}
+
+function dragended(d) {
+  d3.select(this).classed("active", false);
+}
+
+function redraw(data) {
+	var triEdges = svg.selectAll("line.triEdge")
+      .data(data.triEdges);
+    triEdges.exit().remove();
+    if (drawDT) {
+	    triEdges.enter()
+	      .append("line")
+	      .attr("class", "triEdge")
+	      .attr("x1", function(d) { return d.x1; })
+	      .attr("y1", function(d) { return d.y1; })
+	      .attr("x2", function(d) { return d.x2; })
+	      .attr("y2", function(d) { return d.y2; });
+    }
+    
+    var vorEdges = svg.selectAll("line.vorEdge")
+      .data(data.vorEdges);
+    vorEdges.exit().remove();
+    if (drawVD) {
+	    vorEdges.enter()
+	      .append("line")
+	      .attr("class", "vorEdge")
+	      .attr("x1", function(d) { return d.x1; })
+	      .attr("y1", function(d) { return d.y1; })
+	      .attr("x2", function(d) { return d.x2; })
+	      .attr("y2", function(d) { return d.y2; });
+    }
+    
+    var vorCircles = svg.selectAll("circle.vorCircle")
+      .data(data.vorCircles);
+    vorCircles.exit().remove();
+	if (drawVoronoiCircles) {
+	    vorCircles.enter()
+	      .append("circle")
+	      .attr("class", "vorCircle")
+	      .attr("cx", function(d) { return d.cx; })
+	      .attr("cy", function(d) { return d.cy; })
+	      .attr("r", function(d) { return d.r; });
+	}
+}
+
+// function addPoint(x, y) {
+// 	// Initialize the pixi Graphics class
+// 	var graphics = new PIXI.Graphics();
+	
+//     graphics.beginFill(pointColor);
+//     graphics.drawCircle(0, 0, pointRadius);
+//     graphics.interactive = true;
+//     graphics.buttonMode = true;
+//     graphics.hitArea = new PIXI.Circle(0, 0, pointRadius);
+//     graphics
+//     	.on('mousedown', onPointDragStart)
+// 	    .on('touchstart', onPointDragStart)
+// 	    .on('mouseup', onPointDragEnd)
+// 	    .on('mouseupoutside', onPointDragEnd)
+// 	    .on('touchend', onPointDragEnd)
+// 	    .on('touchendoutside', onPointDragEnd)
+// 	    .on('mousemove', onPointDragMove)
+// 	    .on('touchmove', onPointDragMove);
+// 	graphics.position.x = x;
+// 	graphics.position.y = y;
+//     graphics.endFill(pointColor);
+    
+//     // Add the graphics to the stage
+// 	stage.addChild(graphics);
+	
+// 	pointGraphics.push(graphics);
+// }
+
+// function onStageClick(event) {
+// 	var newPosition = event.data.getLocalPosition(this.parent);
+// 	addPoint(newPosition.x, newPosition.y);
+// }
+
+// function onPointDragStart(event) {
+//     // store a reference to the data
+//     // the reason for this is because of multitouch
+//     // we want to track the movement of this particular touch
+//     this.data = event.data;
+//     this.alpha = 0.5;
+//     this.dragging = true;
+// }
+
+// function onPointDragEnd() {
+//     this.alpha = 1;
+
+//     this.dragging = false;
+
+//     // set the interaction data to null
+//     this.data = null;
+// }
+
+// function onPointDragMove() {
+//     if (this.dragging) {
+//         var newPosition = this.data.getLocalPosition(this.parent);
+//         this.position.x = newPosition.x;
+//         this.position.y = newPosition.y;
+//     }
+// }
+
+// /**
+//  * Animate function
+//  */
+// function animate() {
+	// points.length = 0;
+	// for (var i = 0; i < pointGraphics.length; ++i) {
+	// 	var p = new PIXI.Point(pointGraphics[i].position.x, 
+	// 							pointGraphics[i].position.y);
+	// 	points.push(p);
+	// }
+	
+	// // Triangulate
+	// if (points.length < 3) {
+	// 	renderer.render(stage);
+	// } else if (points.length >= 3) {
+	// 	mesh = new Subdivision(points[0], points[1], points[2]);
+	// 	if (points.length == 3) {
+	// 		lineGraphics.clear();
+	// 		mesh.draw();
+	// 		renderer.render(stage);
+	// 	} else {
+	// 		for (var i = 3; i < points.length; ++i) {
+	// 			mesh.insertSite(points[i]);
+	// 		}
+	// 		lineGraphics.clear();
+	// 		mesh.draw();
+	// 		renderer.render(stage);
+	// 	}
+	// }
+	
+    // requestAnimationFrame(animate);
+// }
 
 return {
 	init: init
