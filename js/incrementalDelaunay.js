@@ -13,39 +13,58 @@ var incrementalDelaunay = function() {
 const EPSILON = 1e-6;
 const WIDTH = 720;
 const HEIGHT = 720;
+const SLIDER_MIN = 0;
+const SLIDER_MAX = 100;
 
-var backgroundColor = 0xFFFFFF;
-var pointColor = 0x000000;
 var pointRadius = 5;
-var triangleEdgeWidth = 2;
-var triangleEdgeColor = 0x5D6D7E;
-var voronoiEdgeWidth = 2;
-var voronoiEdgeColor = 0xD35400;
-var voronoiCircleWidth = 1;
-var voronoiCircleColor = 0xE5E8E8;
 
-//var renderer, stage, lineGraphics;
-var points = [];
+var allPoints = [];
 var mesh;
 var timestamp = 0;
 
-var svg = d3.select("svg")
-	.attr("width", WIDTH)
-    .attr("height", HEIGHT);
-
+var svg = d3.select("#canvas").select("svg")
+		.attr("width", WIDTH)
+    .attr("height", HEIGHT)
+		.attr("border", 1);
+var borderPath = svg.append("rect")
+       			.attr("x", 0)
+       			.attr("y", 0)
+       			.attr("height", HEIGHT)
+       			.attr("width", WIDTH)
+       			.style("stroke", 'black')
+       			.style("fill", "none")
+       			.style("stroke-width", 1);
+       			
 var drawDT = true;
 var drawVD = false;
 var drawVoronoiCircles = false;
-var drawSteps = true;
+d3.select("#vorCellsCheckbox").on("change",function() {
+	drawVD = d3.select("#vorCellsCheckbox").property("checked");
+	redraw(frameData[currFrameIdx]);
+});
+d3.select("#vorCirclesCheckbox").on("change",function() {
+	drawVoronoiCircles = d3.select("#vorCirclesCheckbox").property("checked");
+	redraw(frameData[currFrameIdx]);
+});
 
 var frameData = [];
 frameData.push(emptyData());
+var currFrameIdx = 0;
 
 function emptyData() {
 	return {
+		points: [],
 		triEdges: [],
 		vorEdges: [],
-		vorCircles: []
+		vorCircles: [],
+		newEdges: [],
+		delEdges: [],
+		redCircles: [],
+		greenCircles: [],
+		bluePoints: [],
+		redPoints: [],
+		greenPoints: [],
+		middleSteps: true
 	};
 }
 
@@ -147,67 +166,61 @@ class Edge {
 			var a = this.org2d();
 			var b = this.dest2d();
 			
-			if (drawDT) {
-				data.triEdges.push({
-					x1: a.x,
-					y1: a.y,
-					x2: b.x,
-					y2: b.y
-				});
-			}
-			
+			data.triEdges.push({
+				x1: a.x,
+				y1: a.y,
+				x2: b.x,
+				y2: b.y
+			});
+				
 			var result, t;
 			
-			if (drawVD) {
-				var xu = (a.x + b.x) * 0.5;
-				var yu = (a.y + b.y) * 0.5;
-				var theta = Math.atan2((b.y - a.y), (b.x - a.x));
-				var far = Math.max(HEIGHT, WIDTH) * 2;
-				var da = {
-					x: xu - far*Math.sin(theta), 
-					y: yu + far*Math.cos(theta)
-					
-				};
-				var db = {
-					x: xu + far*Math.sin(theta), 
-					y: yu - far*Math.cos(theta)
-					
-				};
-				if (ccw(a, b, da)) {
-					var tmp = da;
-					da = db;
-					db = tmp;
-				}
+			var xu = (a.x + b.x) * 0.5;
+			var yu = (a.y + b.y) * 0.5;
+			var theta = Math.atan2((b.y - a.y), (b.x - a.x));
+			var far = Math.max(HEIGHT, WIDTH) * 2;
+			var da = {
+				x: xu - far*Math.sin(theta), 
+				y: yu + far*Math.cos(theta)
 				
-				t = this.oprev();
-				if (rightOf(t.dest2d(), this)) {
-					result = circumCircle(a, b, t.dest2d());
-					da = result[0];
-				}
-				t = this.onext();
-				if (leftOf(t.dest2d(), this)) {
-					result = circumCircle(a, t.dest2d(), b);
-					db = result[0];
-				}
+			};
+			var db = {
+				x: xu + far*Math.sin(theta), 
+				y: yu - far*Math.cos(theta)
 				
-				data.vorEdges.push({
-					x1: da.x,
-					y1: da.y,
-					x2: db.x,
-					y2: db.y
-				});
+			};
+			if (ccw(a, b, da)) {
+				var tmp = da;
+				da = db;
+				db = tmp;
 			}
 			
-			if (drawVoronoiCircles) {
-				t = this.oprev();
-				if (rightOf(t.dest2d(), this)) {
-					result = circumCircle(a, b, t.dest2d());
-					data.vorCircles.push({
-						cx: result[0].x, 
-						cy: result[0].y, 
-						r: result[1]
-					});
-				}
+			t = this.oprev();
+			if (rightOf(t.dest2d(), this)) {
+				result = circumCircle(a, b, t.dest2d());
+				da = result[0];
+			}
+			t = this.onext();
+			if (leftOf(t.dest2d(), this)) {
+				result = circumCircle(a, t.dest2d(), b);
+				db = result[0];
+			}
+			
+			data.vorEdges.push({
+				x1: da.x,
+				y1: da.y,
+				x2: db.x,
+				y2: db.y
+			});
+			
+			t = this.oprev();
+			if (rightOf(t.dest2d(), this)) {
+				result = circumCircle(a, b, t.dest2d());
+				data.vorCircles.push({
+					cx: result[0].x, 
+					cy: result[0].y, 
+					r: result[1]
+				});
 			}
 			
 			this.onext().draw(stamp, data);
@@ -250,9 +263,15 @@ class QuadEdge {
 
 class Subdivision {
 	constructor(a, b, c) {
-		var oldData = frameData[frameData.length-1];
-		frameData = [];
-		frameData.push(oldData);
+		//var oldData = frameData[frameData.length-1];
+		//frameData = [];
+		//frameData.push(oldData);
+		
+		var newData = emptyData();
+		newData.points.push(a);
+		newData.points.push(b);
+		newData.points.push(c);
+		frameData.push(newData);
 		
 		var da, db, dc;
 		da = a;
@@ -269,8 +288,32 @@ class Subdivision {
 		splice(ec.sym(), ea);
 		this.startingEdge = ea;
 		
-		var newData = emptyData();
+		var newEdgesData = emptyData();
+		newEdgesData.newEdges.push({
+			x1: a.x,
+			y1: a.y,
+			x2: b.x,
+			y2: b.y
+		});
+		newEdgesData.newEdges.push({
+			x1: b.x,
+			y1: b.y,
+			x2: c.x,
+			y2: c.y
+		});
+		newEdgesData.newEdges.push({
+			x1: c.x,
+			y1: c.y,
+			x2: a.x,
+			y2: a.y
+		});
+		newEdgesData.points = frameData[frameData.length-1].points;
+		frameData.push(newEdgesData);
+		
+		newData = emptyData();
 		this.draw(newData);
+		newData.points = frameData[frameData.length-1].points;
+		newData.middleSteps = false;
 		frameData.push(newData);
 	}
 	
@@ -306,53 +349,163 @@ class Subdivision {
 			return;
 		}
 		
-		var oldData = frameData[frameData.length-1];
-		frameData = [];
-		frameData.push(oldData);
+		// var oldData = frameData[frameData.length-1];
+		// frameData = [];
+		// frameData.push(oldData);
+		
+		var newData = emptyData();
+		var prevData = frameData[frameData.length-1];
+		for (var i = 0; i < prevData.points.length; ++i) {
+			newData.points.push(prevData.points[i]);
+		}
+		newData.points.push(x);
+		newData.triEdges = prevData.triEdges;
+		newData.vorEdges = prevData.vorEdges;
+		newData.vorCircles = prevData.vorCircles;
+		frameData.push(newData);
 		
 		if (onEdge(x, e)) {
+			var deleteEdgeData = emptyData();
+			this.draw(deleteEdgeData);
+			deleteEdgeData.points = frameData[frameData.length-1].points;
+			baseData.delEdges.push({
+				x1: e.org().x,
+				y1: e.org().y,
+				x2: e.dest().x,
+				y2: e.dest().y
+			});
+			frameData.push(deleteEdgeData);
+			
 			e = e.oprev();
 			deleteEdge(e.onext());
 		}
+
+		var newEdges = [];
 		
 		var base = makeEdge();
 		base.endPoints(e.org(), x);
 		splice(base, e);
 		this.startingEdge = base;
+		newEdges.push({
+			x1: base.org().x,
+			y1: base.org().y,
+			x2: base.dest().x,
+			y2: base.dest().y
+		});
 		if (inside) {
 			do {
 				base = connect(e, base.sym());
 				e = base.oprev();
+				
+				newEdges.push({
+					x1: base.org().x,
+					y1: base.org().y,
+					x2: base.dest().x,
+					y2: base.dest().y
+				});
 			} while (e.lnext() != this.startingEdge);
 		} else {
 			// TODO: check if new point on edge of convex hull handled properly?
 			do {
 				base = connect(e, base.sym());
 				e = base.oprev();
+				
+				newEdges.push({
+					x1: base.org().x,
+					y1: base.org().y,
+					x2: base.dest().x,
+					y2: base.dest().y
+				});
 			} while (rightOf(e.dest2d(), base));
 			e = base.onext().sym();
 			
 			while (leftOf(this.startingEdge.onext().dest2d(), this.startingEdge)) {
 				var newEdge = connect(this.startingEdge, this.startingEdge.onext().sym());
 				this.startingEdge = newEdge.sym();
+				
+				newEdges.push({
+					x1: newEdge.org().x,
+					y1: newEdge.org().y,
+					x2: newEdge.dest().x,
+					y2: newEdge.dest().y
+				});
 			}
 		}
 		
+		if (newEdges.length > 0) {
+			var newEdgesData = emptyData();
+			prevData = frameData[frameData.length-1];
+			newEdgesData.triEdges = prevData.triEdges;
+			newEdgesData.vorEdges = prevData.vorEdges;
+			newEdgesData.vorCircles = prevData.vorCircles;
+			newEdgesData.newEdges = newEdges;
+			newEdgesData.points = prevData.points;
+			frameData.push(newEdgesData);
+		}
+		
 		do {
+			var baseData = emptyData();
+			this.draw(baseData);
+			baseData.points = frameData[frameData.length-1].points;
+			
 			var t = e.oprev();
-			if (rightOf(t.dest2d(), e) 
-				&& inCircle(e.org2d(), t.dest2d(), e.dest2d(), x)) {
+			if (rightOf(t.dest2d(), e)  
+				&& this.inCircleSteps(e.org2d(), t.dest2d(), e.dest2d(), x, baseData)) {
 				swap(e);
+				
+				baseData.newEdges.push({
+					x1: e.org().x,
+					y1: e.org().y,
+					x2: e.dest().x,
+					y2: e.dest().y
+				});
+				frameData.push(baseData);
+				
 				e = e.oprev();
 			} else if (e.onext() == this.startingEdge) {
-				var newData = emptyData();
-				this.draw(newData);
-				frameData.push(newData);
+				baseData = emptyData();
+				this.draw(baseData);
+				baseData.points = frameData[frameData.length-1].points;
+				baseData.middleSteps = false;
+				frameData.push(baseData);
 				return;
 			} else {
 				e = e.onext().lprev();
 			}
 		} while (true);
+	}
+	
+	inCircleSteps(a, b, c, d, baseData) {
+		baseData.bluePoints.push(a);
+		baseData.bluePoints.push(b);
+		baseData.bluePoints.push(c);
+		var circle = circumCircle(a, b, c);
+		if (inCircle(a, b, c, d)) {
+			baseData.redCircles.push({
+				cx: circle[0].x, 
+				cy: circle[0].y, 
+				r: circle[1]
+			});
+			baseData.redPoints.push(d);
+			baseData.delEdges.push({
+				x1: a.x,
+				y1: a.y,
+				x2: c.x,
+				y2: c.y
+			});
+			
+			return true;
+		} else {
+			baseData.greenCircles.push({
+				cx: circle[0].x, 
+				cy: circle[0].y, 
+				r: circle[1]
+			});
+			baseData.greenPoints.push(d);
+			frameData.push(baseData);
+			
+			return false;
+		}
 	}
 	
 	draw(data) {
@@ -473,222 +626,206 @@ function swap(e) {
 }
 
 
-/**
- * Initializes WebGL using three.js and sets up the scene
- */
-function init() {
-	// renderer = PIXI.autoDetectRenderer(RENDER_WIDTH, RENDER_HEIGHT, { backgroundColor: 0x000000, antialias: true });
-	// renderer.backgroundColor = backgroundColor;
-	    
-	// // Add the render window to the document
-	// document.body.appendChild( renderer.view );
-	
-	// // Create the main stage for your display objects
-	// stage = new PIXI.Container();
-	// stage.position.y = renderer.height / renderer.resolution;
-	// stage.scale.y = -1;
-	
-	// var dummy = new PIXI.Container();
-	// dummy.interactive = true;
-	// dummy.hitArea = new PIXI.Rectangle(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
-	// dummy
-	// 	.on('mousedown', onStageClick)
-	//     .on('touchstart', onStageClick);
-	// stage.addChild(dummy);
-
-	// lineGraphics = new PIXI.Graphics();
-	// stage.addChild(lineGraphics);
-
-	// Start animating
-	// animate();
-}
-
 svg
 //.on('dragstart', function () { d3.event.sourceEvent.stopPropagation(); })
 .on("click", function() {
-	var coords = d3.mouse(this);
-
-	// Normally we go from data to pixels, but here we're doing pixels to data
-	var newData = {
-		x: coords[0],
-    	y: coords[1]
-	};
-
-	points.push(newData);
-	
-	svg.selectAll("circle.point")
-            .data(points)
-            .enter()
-    		.append("circle")
-		    .attr("class", "point")
-    		.attr("cx", function(d) { return d.x; })
-    		.attr("cy", function(d) { return d.y; })
-		    .attr("r", pointRadius);
-		    // .call(d3.drag()
-	     //   .on("start", dragstarted)
-	     //   .on("drag", dragged)
-	     //   .on("end", dragended));
-	     
-	// Triangulate
-	if (points.length >= 3) {
-		if (points.length == 3) {
-			mesh = new Subdivision(points[0], points[1], points[2]);
+	if (currFrameIdx == frameData.length-1) {
+		var coords = d3.mouse(this);
+		var point = {
+			x: coords[0],
+	    	y: coords[1]
+		};
+		allPoints.push(point);
+		
+		// svg.selectAll("circle.point")
+	 //           .data(points)
+	 //           .enter()
+	 //   		.append("circle")
+		// 	    .attr("class", "point")
+	 //   		.attr("cx", function(d) { return d.x; })
+	 //   		.attr("cy", function(d) { return d.y; })
+		// 	    .attr("r", pointRadius);
+		// 	    // .call(d3.drag()
+		     //   .on("start", dragstarted)
+		     //   .on("drag", dragged)
+		     //   .on("end", dragended));
+		
+		// Triangulate
+		if (allPoints.length >= 3) {
+			if (allPoints.length == 3) {
+				mesh = new Subdivision(allPoints[0], allPoints[1], allPoints[2]);
+			} else {
+				mesh.insertSite(point);
+			}
 		} else {
-			mesh.insertSite(points[points.length - 1]);
+			var newData = emptyData();
+			if (frameData.length > 0) {
+				var prevData = frameData[frameData.length-1];
+				for (var i = 0; i < prevData.points.length; ++i) {
+					newData.points.push(prevData.points[i]);
+				}
+			}
+			newData.points.push(point);
+			frameData.push(newData);
 		}
 		
-		redraw(frameData[frameData.length-1]);
+		slider.setValue(SLIDER_MAX);
 	}
 });
 
-function dragstarted(d) {
-  d3.select(this).raise().classed("active", true);
-}
+// function dragstarted(d) {
+//   d3.select(this).raise().classed("active", true);
+// }
 
-function dragged(d) {
-  d3.select(this).attr("cx", d.x = d3.event.x).attr("cy", d.y = d3.event.y);
-}
+// function dragged(d) {
+//   d3.select(this).attr("cx", d.x = d3.event.x).attr("cy", d.y = d3.event.y);
+// }
 
-function dragended(d) {
-  d3.select(this).classed("active", false);
-}
+// function dragended(d) {
+//   d3.select(this).classed("active", false);
+// }
 
 function redraw(data) {
-	var triEdges = svg.selectAll("line.triEdge")
-      .data(data.triEdges);
-    triEdges.exit().remove();
-    if (drawDT) {
-	    triEdges.enter()
-	      .append("line")
-	      .attr("class", "triEdge")
-	      .attr("x1", function(d) { return d.x1; })
-	      .attr("y1", function(d) { return d.y1; })
-	      .attr("x2", function(d) { return d.x2; })
-	      .attr("y2", function(d) { return d.y2; });
-    }
+		var middleSteps = data.middleSteps;
+    var vorCircles = svg.selectAll("circle.vorCircle")
+      .data((!middleSteps && drawVoronoiCircles) ? data.vorCircles : []);
+    vorCircles.exit().remove();
+    vorCircles.enter()
+      .append("circle")
+      .attr("class", "vorCircle")
+      .merge(vorCircles)
+      .attr("cx", function(d) { return d.cx; })
+      .attr("cy", function(d) { return d.cy; })
+      .attr("r", function(d) { return d.r; });
     
     var vorEdges = svg.selectAll("line.vorEdge")
-      .data(data.vorEdges);
+      .data((!middleSteps && drawVD) ? data.vorEdges : []);
     vorEdges.exit().remove();
-    if (drawVD) {
-	    vorEdges.enter()
-	      .append("line")
-	      .attr("class", "vorEdge")
-	      .attr("x1", function(d) { return d.x1; })
-	      .attr("y1", function(d) { return d.y1; })
-	      .attr("x2", function(d) { return d.x2; })
-	      .attr("y2", function(d) { return d.y2; });
-    }
+    vorEdges.enter()
+      .append("line")
+      .attr("class", "vorEdge")
+      .merge(vorEdges)
+      .attr("x1", function(d) { return d.x1; })
+      .attr("y1", function(d) { return d.y1; })
+      .attr("x2", function(d) { return d.x2; })
+      .attr("y2", function(d) { return d.y2; });
+      
+    var redCircles = svg.selectAll("circle.redCircle")
+      .data(data.redCircles);
+    redCircles.exit().remove();
+    redCircles.enter()
+      .append("circle")
+      .attr("class", "redCircle")
+      .merge(redCircles)
+      .attr("cx", function(d) { return d.cx; })
+      .attr("cy", function(d) { return d.cy; })
+      .attr("r", function(d) { return d.r; });
+      
+    var greenCircles = svg.selectAll("circle.greenCircle")
+      .data(data.greenCircles);
+    greenCircles.exit().remove();
+    greenCircles.enter()
+      .append("circle")
+      .attr("class", "greenCircle")
+      .merge(greenCircles)
+      .attr("cx", function(d) { return d.cx; })
+      .attr("cy", function(d) { return d.cy; })
+      .attr("r", function(d) { return d.r; });
+      
+    var bluePoints = svg.selectAll("circle.bluePoint")
+      .data(data.bluePoints);
+    bluePoints.exit().remove();
+    bluePoints.enter()
+      .append("circle")
+      .attr("class", "bluePoint")
+      .merge(bluePoints)
+      .attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; })
+      .attr("r", pointRadius);
+      
+    var greenPoints = svg.selectAll("circle.greenPoint")
+      .data(data.greenPoints);
+    greenPoints.exit().remove();
+    greenPoints.enter()
+      .append("circle")
+      .attr("class", "greenPoint")
+      .merge(greenPoints)
+      .attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; })
+      .attr("r", pointRadius);
+      
+    var redPoints = svg.selectAll("circle.redPoint")
+      .data(data.redPoints);
+    redPoints.exit().remove();
+    redPoints.enter()
+      .append("circle")
+      .attr("class", "redPoint")
+      .merge(redPoints)
+      .attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; })
+      .attr("r", pointRadius);
+      
+    var newEdges = svg.selectAll("line.newEdge")
+      .data(data.newEdges);
+    newEdges.exit().remove();
+    newEdges.enter()
+      .append("line")
+      .attr("class", "newEdge")
+      .merge(newEdges)
+      .attr("x1", function(d) { return d.x1; })
+      .attr("y1", function(d) { return d.y1; })
+      .attr("x2", function(d) { return d.x2; })
+      .attr("y2", function(d) { return d.y2; });
     
-    var vorCircles = svg.selectAll("circle.vorCircle")
-      .data(data.vorCircles);
-    vorCircles.exit().remove();
-	if (drawVoronoiCircles) {
-	    vorCircles.enter()
-	      .append("circle")
-	      .attr("class", "vorCircle")
-	      .attr("cx", function(d) { return d.cx; })
-	      .attr("cy", function(d) { return d.cy; })
-	      .attr("r", function(d) { return d.r; });
-	}
+    var triEdges = svg.selectAll("line.triEdge")
+      .data(drawDT ? data.triEdges : []);
+    triEdges.exit().remove();
+    triEdges.enter()
+      .append("line")
+      .attr("class", "triEdge")
+      .merge(triEdges)
+      .attr("x1", function(d) { return d.x1; })
+      .attr("y1", function(d) { return d.y1; })
+      .attr("x2", function(d) { return d.x2; })
+      .attr("y2", function(d) { return d.y2; });
+    
+    var delEdges = svg.selectAll("line.delEdge")
+      .data(data.delEdges);
+    delEdges.exit().remove();
+    delEdges.enter()
+      .append("line")
+      .attr("class", "delEdge")
+      .merge(delEdges)
+      .attr("x1", function(d) { return d.x1; })
+      .attr("y1", function(d) { return d.y1; })
+      .attr("x2", function(d) { return d.x2; })
+      .attr("y2", function(d) { return d.y2; });
+      
+    var points = svg.selectAll("circle.point")
+      .data(data.points);
+    points.exit().remove();
+    points.enter()
+      .append("circle")
+      .attr("class", "point")
+      .merge(points)
+      .attr("cx", function(d) { return d.x; })
+      .attr("cy", function(d) { return d.y; })
+      .attr("r", pointRadius);
 }
 
-// function addPoint(x, y) {
-// 	// Initialize the pixi Graphics class
-// 	var graphics = new PIXI.Graphics();
-	
-//     graphics.beginFill(pointColor);
-//     graphics.drawCircle(0, 0, pointRadius);
-//     graphics.interactive = true;
-//     graphics.buttonMode = true;
-//     graphics.hitArea = new PIXI.Circle(0, 0, pointRadius);
-//     graphics
-//     	.on('mousedown', onPointDragStart)
-// 	    .on('touchstart', onPointDragStart)
-// 	    .on('mouseup', onPointDragEnd)
-// 	    .on('mouseupoutside', onPointDragEnd)
-// 	    .on('touchend', onPointDragEnd)
-// 	    .on('touchendoutside', onPointDragEnd)
-// 	    .on('mousemove', onPointDragMove)
-// 	    .on('touchmove', onPointDragMove);
-// 	graphics.position.x = x;
-// 	graphics.position.y = y;
-//     graphics.endFill(pointColor);
-    
-//     // Add the graphics to the stage
-// 	stage.addChild(graphics);
-	
-// 	pointGraphics.push(graphics);
-// }
-
-// function onStageClick(event) {
-// 	var newPosition = event.data.getLocalPosition(this.parent);
-// 	addPoint(newPosition.x, newPosition.y);
-// }
-
-// function onPointDragStart(event) {
-//     // store a reference to the data
-//     // the reason for this is because of multitouch
-//     // we want to track the movement of this particular touch
-//     this.data = event.data;
-//     this.alpha = 0.5;
-//     this.dragging = true;
-// }
-
-// function onPointDragEnd() {
-//     this.alpha = 1;
-
-//     this.dragging = false;
-
-//     // set the interaction data to null
-//     this.data = null;
-// }
-
-// function onPointDragMove() {
-//     if (this.dragging) {
-//         var newPosition = this.data.getLocalPosition(this.parent);
-//         this.position.x = newPosition.x;
-//         this.position.y = newPosition.y;
-//     }
-// }
-
-// /**
-//  * Animate function
-//  */
-// function animate() {
-	// points.length = 0;
-	// for (var i = 0; i < pointGraphics.length; ++i) {
-	// 	var p = new PIXI.Point(pointGraphics[i].position.x, 
-	// 							pointGraphics[i].position.y);
-	// 	points.push(p);
-	// }
-	
-	// // Triangulate
-	// if (points.length < 3) {
-	// 	renderer.render(stage);
-	// } else if (points.length >= 3) {
-	// 	mesh = new Subdivision(points[0], points[1], points[2]);
-	// 	if (points.length == 3) {
-	// 		lineGraphics.clear();
-	// 		mesh.draw();
-	// 		renderer.render(stage);
-	// 	} else {
-	// 		for (var i = 3; i < points.length; ++i) {
-	// 			mesh.insertSite(points[i]);
-	// 		}
-	// 		lineGraphics.clear();
-	// 		mesh.draw();
-	// 		renderer.render(stage);
-	// 	}
-	// }
-	
-    // requestAnimationFrame(animate);
-// }
-
-return {
-	init: init
-};
+var slider = d3.slider()
+	.min(SLIDER_MIN)
+	.max(SLIDER_MAX)
+	.showRange(true)
+	.value(100)
+	.tickFormat(function(d) {
+		return "";
+	})
+	.callback(function(slider) {
+		var alpha = slider.getValue() / (SLIDER_MAX - SLIDER_MIN);
+		currFrameIdx = Math.round(alpha * (frameData.length-1));
+		redraw(frameData[currFrameIdx]);
+	});
+d3.select('#slider').call(slider);
 
 }();
-
-incrementalDelaunay.init();

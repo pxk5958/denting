@@ -2,25 +2,87 @@
 
 <head>
 	<meta charset="utf-8" />
+	<link rel="stylesheet" href="d3.slider.css" />  
 	<style type="text/css">
 		.point {
 			fill: #000000;
 			fill-opacity: 1;
 			stroke: #000000;
 			stroke-opacity: 1;
+			z-index: 1;
 		}
 		.triEdge {
+			stroke-width: 3;
 			stroke: #5D6D7E;
 			stroke-opacity: 1;
+			z-index: -1;
 		}
 		.vorEdge {
+			stroke-width: 2;
 			stroke: #D35400;
 			stroke-opacity: 1;
+			z-index: -2;
 		}
 		.vorCircle {
+			stroke-width: 1;
 			fill-opacity: 0;
 			stroke: #E5E8E8;
 			stroke-opacity: 1;
+			z-index: -3;
+		}
+		.newEdge {
+			stroke-dasharray: 5, 5;
+			stroke-width: 3;
+			stroke: #5D6D7E;
+			stroke-opacity: 1;
+			z-index: -1;
+		}
+		.delEdge {
+			stroke-width: 3;
+			stroke: #FF0000;
+			stroke-opacity: 1;
+			z-index: 0;
+		}
+		.redCircle {
+			stroke-width: 2;
+			fill-opacity: 0;
+			stroke: #FF0000;
+			stroke-opacity: 1;
+			z-index: 0;
+		}
+		.greenCircle {
+			stroke-width: 2;
+			fill-opacity: 0;
+			stroke: #00FF00;
+			stroke-opacity: 1;
+			z-index: 0;
+		}
+		.bluePoint {
+			fill: #0000FF;
+			fill-opacity: 1;
+			stroke: #000000;
+			stroke-opacity: 1;
+			z-index: 0;
+		}
+		.greenPoint {
+			fill: #00FF00;
+			fill-opacity: 1;
+			stroke: #000000;
+			stroke-opacity: 1;
+			z-index: 0;
+		}
+		.redPoint {
+			fill: #FF0000;
+			fill-opacity: 1;
+			stroke: #000000;
+			stroke-opacity: 1;
+			z-index: 0;
+		}
+		.leftContainer {
+			float: left;
+		}
+		.rightContainer {
+			float: right;
 		}
     </style>
 </head>
@@ -29,11 +91,59 @@
 	<!--script src="js/pixi.min.js"></script-->
 	<script src="js/three.min.js"></script>
 	<script src="js/d3.min.js"></script>
+	<script src="js/d3.slider.js"></script>
 
 	<table width="100%">
 		<tr>
 			<td class="itemBlock" valign="top" style="width:640px" align="center">
-				<svg></svg>
+				<h1>Incremental Delaunay Triangulation</h1>
+				<div class="leftContainer" id="canvas">
+					<h3 style="text-align:left;">Canvas (click to add points):</h3>
+					<svg></svg>
+				</div>
+				<div class="rightContainer" id="pseudocode">
+					<h3 style="text-align:left;">Pseudocode:</h3>
+					<textarea rows="30" cols="50" readonly 
+					style="font-family:Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New;">
+insert(p) {
+	e = locate edge to the immediate right 
+	    of which p is present; 
+
+	if (p is on one of the endpoints of e) {
+		return;
+	}
+
+	if (p is on e) {
+		delete e;
+	}
+
+	connect p to surrounding vertices;
+
+	for every edge ab opposite to p:
+		swapTest(ab);
+}
+
+swapTest(ab) {
+	if (ab is an edge on exterior face) {
+		return;
+	}
+	
+	Let d be vertex to the right of edge ab;
+	if (p is inside circumcircle of a,b,d) {
+		Flip edge ab for pd;
+		swapTest(ad);
+		swapTest(db);
+	}
+}	
+					</textarea>
+					<br><br><br><br>
+					<input type="checkbox" id="vorCellsCheckbox">
+					<label for="vorCellsCheckbox">Draw Voronoi Cells</label>
+					<br>
+					<input type="checkbox" id="vorCirclesCheckbox">
+					<label for="vorCirclesCheckbox">Draw Voronoi Circles</label>
+				</div>
+				<div id="slider"></div>
 				
 		        <script src="js/incrementalDelaunay.js"></script>
 			</td>
