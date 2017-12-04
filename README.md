@@ -17,5 +17,5 @@ D3.js framework
 ## Timeline
 - [x] Week 6-9: Research tetrahedralization algorithms and implement (Cancelled)
 - [x] Week 10-11: Implement incremental Delaunay triangulation algorithm
-- [ ] Week 12: GUI using D3.js
-- [ ] Week 13-14: Testing
+- [x] Week 12: GUI using D3.js
+- [x] Week 13-14: Testing
