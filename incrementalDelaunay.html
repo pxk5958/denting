@@ -88,22 +88,19 @@
 </head>
 
 <body>
-	<!--script src="js/pixi.min.js"></script-->
 	<script src="js/three.min.js"></script>
 	<script src="js/d3.min.js"></script>
 	<script src="js/d3.slider.js"></script>
 
-	<table width="100%">
-		<tr>
-			<td class="itemBlock" valign="top" style="width:640px" align="center">
-				<h1>Incremental Delaunay Triangulation</h1>
+				<h1 align="center">Incremental Delaunay Triangulation</h1>
+				<h4 align="center"><i>by Pratith Kanagaraj (pxk5958@rit.edu)</i></h4>
 				<div class="leftContainer" id="canvas">
 					<h3 style="text-align:left;">Canvas (click to add points):</h3>
 					<svg></svg>
 				</div>
 				<div class="rightContainer" id="pseudocode">
 					<h3 style="text-align:left;">Pseudocode:</h3>
-					<textarea rows="30" cols="50" readonly 
+					<textarea rows="32" cols="50" readonly 
 					style="font-family:Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New;">
 insert(p) {
 	e = locate edge to the immediate right 
@@ -144,9 +141,57 @@ swapTest(ab) {
 					<label for="vorCirclesCheckbox">Draw Voronoi Circles</label>
 				</div>
 				<div id="slider"></div>
+
+<h3>About the demo</h3>
+<p>
+The above demo is to show how incremental construction of Delaunay Traingulation works. It also shows the dual Voronoi Diagram. It uses <a href="https://en.wikipedia.org/wiki/Quad-edge">quad-edge data structure</a> to store both the triangulation diagram and its dual.
+</p>
+
+<h3>How to use</h3>
+<p>
+<ol>
+<li>Click on the canvas to insert points.</li>
+<li>Use the slider below the canvas to go back in time and step through the incremental algorithm.</li>
+</ol>
+</p>
+
+<h3>Source Code</h3>
+<a href="https://github.com/pxk5958/incrementalDelaunay">Github repository</a>
+
+<h3>Delaunay Triangulation</h3>
+<p>
+For a given set P of discrete points in a plane, DT(P) is a triangulation such that no point in P is inside the circumcircle of any triangle in DT(P).
+</p>
+
+<h3>Voronoi Diagram</h3>
+<p>
+It is the dual of Delaunay Triangulation. Every face in DT becomes a vertex in VD, and every vertex in DT becomes a face in VD.
+</p>
+
+<h3>Applications of Delaunay Triangulation</h3>
+<p>
+<ol>
+<li>The boundary of the exterior faces of the DT is the boundary of the convex hull of the point set.</li>
+<li>The closest pair of sites in P are neighbors in the DT.</li>
+<li>Finding the minimum spanning tree by computing the Euclidean graph and then using Kruskal's algorithm takes a total running time of O(n2 logn). Instead, we can compute the Delaunay Triangulation of the point set in O(n logn) time and then use Kruskal's algorithm, leading to a total running time of O(n logn).</li>
+<li>Triangulation of a set of points by maximizing angles, i.e., DT maximizes the minimum angle and hence tends to avoid skinny triangles. This is useful for many applications where triangles are used for the purposes of interpolation, for example, texture mapping in computer graphics.</li>
+</ol>
+</p>
+<h3>Incremental Construction of Delaunay Triangulation</h3>
+<p><a href="https://en.wikipedia.org/wiki/Delaunay_triangulation#Incremental">Incremental Delaunay Triangulation</a> is an algorithm by which points are inserted in random order, one at a time, and the triangulation is updated with each new addition.</p>
+<p>
+The time complexity depends on:
+<ul>
+<li>The expected number of structural changes in the diagram after insertion</li>
+<li>Locating the point to be inserted</li>
+</ul>
+After a point is inserted, it is connected to the surrounding vertices. Incircle test is performed on the endpoints of the surrounding edges and the point opposite to it to check if the newly inserted point lies in their circumcircle. If it lies inside, an edge flip is performed. All these structural changes can be done in O(1) time.
+<br><br>
+If the set of points to be inserted is known beforehand, we can bucket and rebucket the points within the triangulation diagram after each insertion in O(logn) time. But, in the above demo app, the set of points are not known beforehand since the user inputs it each time by clicking. Hence, in the above demo, time complexity to locate a point is actually O(n).
+<br><br>
+Thus, summing over n insertions, the overall time complexity of the algorithm is <b>O(n logn)</b> [O(n<sup>2</sup>) in the above demo].
+</p>
 				
 		        <script src="js/incrementalDelaunay.js"></script>
-			</td>
-		</tr>
-	</table>
+			
 </body>
