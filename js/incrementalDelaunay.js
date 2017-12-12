@@ -349,10 +349,6 @@ class Subdivision {
 			return;
 		}
 		
-		// var oldData = frameData[frameData.length-1];
-		// frameData = [];
-		// frameData.push(oldData);
-		
 		var newData = emptyData();
 		var prevData = frameData[frameData.length-1];
 		for (var i = 0; i < prevData.points.length; ++i) {
@@ -405,7 +401,6 @@ class Subdivision {
 				});
 			} while (e.lnext() != this.startingEdge);
 		} else {
-			// TODO: check if new point on edge of convex hull handled properly?
 			do {
 				base = connect(e, base.sym());
 				e = base.oprev();
@@ -627,7 +622,6 @@ function swap(e) {
 
 
 svg
-//.on('dragstart', function () { d3.event.sourceEvent.stopPropagation(); })
 .on("click", function() {
 	if (currFrameIdx == frameData.length-1) {
 		var coords = d3.mouse(this);
@@ -636,19 +630,6 @@ svg
 	    	y: coords[1]
 		};
 		allPoints.push(point);
-		
-		// svg.selectAll("circle.point")
-	 //           .data(points)
-	 //           .enter()
-	 //   		.append("circle")
-		// 	    .attr("class", "point")
-	 //   		.attr("cx", function(d) { return d.x; })
-	 //   		.attr("cy", function(d) { return d.y; })
-		// 	    .attr("r", pointRadius);
-		// 	    // .call(d3.drag()
-		     //   .on("start", dragstarted)
-		     //   .on("drag", dragged)
-		     //   .on("end", dragended));
 		
 		// Triangulate
 		if (allPoints.length >= 3) {
@@ -672,18 +653,6 @@ svg
 		slider.setValue(SLIDER_MAX);
 	}
 });
-
-// function dragstarted(d) {
-//   d3.select(this).raise().classed("active", true);
-// }
-
-// function dragged(d) {
-//   d3.select(this).attr("cx", d.x = d3.event.x).attr("cy", d.y = d3.event.y);
-// }
-
-// function dragended(d) {
-//   d3.select(this).classed("active", false);
-// }
 
 function redraw(data) {
 		var middleSteps = data.middleSteps;
